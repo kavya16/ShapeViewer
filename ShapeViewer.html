@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Improved Shape Viewer</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        #file-content, #shape-viewport { 
+            margin-top: 20px; 
+            border: 1px solid #ccc; 
+            padding: 10px; 
+        }
+        #shape-viewport { position: relative; height: 400px; }
+    </style>
+</head>
+<body>
+    <h1>Improved Shape Viewer</h1>
+    <input type="file" id="file-input" accept=".txt,.shapefile,.rtf">
+    <div id="file-content"></div>
+    <div id="shape-viewport"></div>
+
+    <script>
+        document.getElementById('file-input').addEventListener('change', function(event) {
+            const file = event.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    let content = e.target.result;
+                    content = stripRTF(content);
+                    document.getElementById('file-content').textContent = content;
+                    renderShapes(content);
+                };
+                reader.readAsText(file);
+            }
+        });
+
+        function stripRTF(rtf) {
+            // Remove RTF formatting
+            rtf = rtf.replace(/\\[a-z]{1,32}(-?\d{1,10})?[ ]?|\\'[0-9a-f]{2}|\\[^a-z]|[{}]|\r+|\n+/gi, "");
+            // Replace semicolons with newlines for proper parsing
+            return rtf.replace(/;/g, '\n').trim();
+        }
+
+        function renderShapes(content) {
+            const viewport = document.getElementById('shape-viewport');
+            viewport.innerHTML = '';
+            const lines = content.split('\n');
+            lines.forEach(line => {
+                if (line.trim() && !line.startsWith('//')) {
+                    const [type, x, y, z, width, height, color] = line.split(',').map(s => s.trim());
+                    const shape = document.createElement('div');
+                    shape.style.position = 'absolute';
+                    shape.style.left = x + 'px';
+                    shape.style.top = y + 'px';
+                    shape.style.width = width + 'px';
+                    shape.style.height = height + 'px';
+                    shape.style.backgroundColor = '#' + color;
+                    shape.style.border = '1px solid black';
+                    viewport.appendChild(shape);
+                }
+            });
+        }
+    </script>
+</body>
+</html>
