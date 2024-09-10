@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Improved Shape Viewer</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        margin: 20px;
+      }
+      #file-content,
+      #shape-viewport,
+      #debug-output,
+      #error-output {
+        margin-top: 20px;
+        border: 1px solid #ccc;
+        padding: 10px;
+      }
+      #shape-viewport {
+        position: relative;
+        height: 400px;
+      }
+      #debug-output,
+      #error-output {
+        white-space: pre-wrap;
+      }
+      #error-output {
+        color: red;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Improved Shape Viewer</h1>
+    <input type="file" id="file-input" accept=".txt,.shapefile,.rtf" />
+    <div id="file-content"></div>
+    <div id="shape-viewport"></div>
+    <div id="debug-output"></div>
+    <div id="error-output"></div>
+
+    <script>
+      document
+        .getElementById("file-input")
+        .addEventListener("change", function (event) {
+          const file = event.target.files[0];
+          if (file) {
+            const reader = new FileReader();
+            reader.onload = function (e) {
+              let content = e.target.result;
+              try {
+                content = stripRTF(content);
+                document.getElementById("file-content").textContent = content;
+                renderShapes(content);
+              } catch (error) {
+                handleError(error);
+              }
+            };
+            reader.onerror = function (e) {
+              handleError(new Error("File read error: " + e.target.error));
+            };
+            reader.readAsText(file);
+          }
+        });
+
+      function stripRTF(rtf) {
+        if (typeof rtf !== "string") {
+          throw new Error("Invalid input: RTF content must be a string");
+        }
+        rtf = rtf.replace(
+          /\\[a-z]{1,32}(-?\d{1,10})?[ ]?|\\'[0-9a-f]{2}|\\[^a-z]|[{}]|\r+|\n+/gi,
+          ""
+        );
+        return rtf
+          .split(/(?=Rectangle|Triangle|Polygon)/)
+          .map((s) => s.trim())
+          .filter((s) => s);
+      }
+
+      function renderShapes(content) {
+        const viewport = document.getElementById("shape-viewport");
+        const debugOutput = document.getElementById("debug-output");
+        viewport.innerHTML = "";
+        debugOutput.textContent = "";
+
+        content.forEach((shape, index) => {
+          try {
+            const [type, ...params] = shape.split(",").map((s) => s.trim());
+            if (!type) throw new Error("Shape type is missing");
+
+            debugOutput.textContent += `Processing shape ${
+              index + 1
+            }: ${type}\n`;
+
+            const shapeElement = document.createElement("div");
+            shapeElement.style.position = "absolute";
+
+            switch (type.toLowerCase()) {
+              case "rectangle":
+                renderRectangle(shapeElement, params, debugOutput);
+                break;
+              case "triangle":
+                renderTriangle(shapeElement, params, debugOutput);
+                break;
+              case "polygon":
+                renderPolygon(shapeElement, params, debugOutput);
+                break;
+              default:
+                throw new Error(`Unknown shape type: ${type}`);
+            }
+
+            viewport.appendChild(shapeElement);
+          } catch (error) {
+            handleError(error, `Error processing shape ${index + 1}`);
+          }
+        });
+      }
+
+      function renderRectangle(element, params, debugOutput) {
+        if (params.length !== 6)
+          throw new Error("Invalid number of parameters for Rectangle");
+        const [x, y, z, width, height, color] = params.map(validateNumeric);
+        validateColor(color);
+
+        element.style.left = x + "px";
+        element.style.top = y + "px";
+        element.style.width = width + "px";
+        element.style.height = height + "px";
+        element.style.backgroundColor = "#" + color;
+        element.style.zIndex = z;
+        debugOutput.textContent += `  Rectangle: (${x}, ${y}) ${width}x${height}, color: #${color}\n`;
+      }
+
+      function renderTriangle(element, params, debugOutput) {
+        if (params.length !== 8)
+          throw new Error("Invalid number of parameters for Triangle");
+        renderPolygon(element, params, debugOutput, "Triangle");
+      }
+
+      function renderPolygon(
+        element,
+        params,
+        debugOutput,
+        shapeType = "Polygon"
+      ) {
+        if (params.length < 8 || params.length % 2 !== 0) {
+          throw new Error(`Invalid number of parameters for ${shapeType}`);
+        }
+        const z = validateNumeric(params[params.length - 2]);
+        const color = params[params.length - 1];
+        validateColor(color);
+        const points = params.slice(0, -2).map(validateNumeric);
+
+        const minX = Math.min(...points.filter((_, i) => i % 2 === 0));
+        const minY = Math.min(...points.filter((_, i) => i % 2 === 1));
+        const maxX = Math.max(...points.filter((_, i) => i % 2 === 0));
+        const maxY = Math.max(...points.filter((_, i) => i % 2 === 1));
+
+        element.style.left = minX + "px";
+        element.style.top = minY + "px";
+        element.style.width = maxX - minX + "px";
+        element.style.height = maxY - minY + "px";
+        element.style.zIndex = z;
+
+        const canvas = document.createElement("canvas");
+        canvas.width = maxX - minX;
+        canvas.height = maxY - minY;
+        const ctx = canvas.getContext("2d");
+
+        ctx.beginPath();
+        ctx.moveTo(points[0] - minX, points[1] - minY);
+        for (let i = 2; i < points.length; i += 2) {
+          ctx.lineTo(points[i] - minX, points[i + 1] - minY);
+        }
+        ctx.closePath();
+        ctx.fillStyle = "#" + color;
+        ctx.fill();
+
+        element.appendChild(canvas);
+        debugOutput.textContent += `  ${shapeType}: Points: ${points.join(
+          ","
+        )}, color: #${color}\n`;
+      }
+
+      function validateNumeric(value) {
+        if (/^[0-9A-Fa-f]{6}$/.test(value)) {
+          // It's a valid hexadecimal color, so don't convert it to a number.
+          return value;
+        }
+        const num = Number(value);
+        if (isNaN(num)) throw new Error(`Invalid numeric value: ${value}`);
+        return num;
+      }
+
+      function validateColor(color) {
+        if (!/^[0-9A-Fa-f]{6}$/.test(color)) {
+          throw new Error(`Invalid color format: ${color}`);
+        }
+      }
+
+      function handleError(error, context = "") {
+        console.error(error);
+        const errorOutput = document.getElementById("error-output");
+        errorOutput.textContent += `${context ? context + ": " : ""}${
+          error.message
+        }\n`;
+      }
+    </script>
+  </body>
+</html>
