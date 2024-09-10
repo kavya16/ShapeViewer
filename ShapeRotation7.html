@@ -287,30 +287,46 @@
         element.appendChild(rotateHandle);
       }
 
-      // Function to start rotation
-      function startRotating(e) {
-        e.stopPropagation(); // Prevent dragging
-        const shape = this.parentElement;
-        const shapeBounds = shape.getBoundingClientRect();
-        const shapeCenterX = shapeBounds.left + shapeBounds.width / 2;
-        const shapeCenterY = shapeBounds.top + shapeBounds.height / 2;
+      function makeShapeRotatable(element) {
+        const rotateHandle = document.createElement("div");
+        rotateHandle.style.position = "absolute";
+        rotateHandle.style.top = "-15px";
+        rotateHandle.style.left = "50%";
+        rotateHandle.style.width = "10px";
+        rotateHandle.style.height = "10px";
+        rotateHandle.style.background = "blue";
+        rotateHandle.style.cursor = "pointer";
+        rotateHandle.style.borderRadius = "50%";
+        rotateHandle.style.transform = "translateX(-50%)";
 
-        function rotateShape(e) {
-          const angle = Math.atan2(
-            e.clientY - shapeCenterY,
-            e.clientX - shapeCenterX
-          );
-          shape.style.transform = `rotate(${angle}rad)`;
-        }
+        let rotating = false;
+        let startAngle = 0;
 
-        document.addEventListener("mousemove", rotateShape);
-        document.addEventListener(
-          "mouseup",
-          () => {
-            document.removeEventListener("mousemove", rotateShape);
-          },
-          { once: true }
-        );
+        rotateHandle.addEventListener("mousedown", (e) => {
+          e.stopPropagation(); // Prevent dragging
+          rotating = true;
+          const rect = element.getBoundingClientRect();
+          const centerX = rect.left + rect.width / 2;
+          const centerY = rect.top + rect.height / 2;
+          startAngle = Math.atan2(e.clientY - centerY, e.clientX - centerX);
+        });
+
+        document.addEventListener("mousemove", (e) => {
+          if (rotating) {
+            const rect = element.getBoundingClientRect();
+            const centerX = rect.left + rect.width / 2;
+            const centerY = rect.top + rect.height / 2;
+            const angle = Math.atan2(e.clientY - centerY, e.clientX - centerX);
+            const rotation = angle - startAngle;
+            element.style.transform = `rotate(${rotation}rad)`;
+          }
+        });
+
+        document.addEventListener("mouseup", () => {
+          rotating = false;
+        });
+
+        element.appendChild(rotateHandle);
       }
     </script>
   </body>
