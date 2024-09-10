@@ -1,47 +1,48 @@
 # Shape Viewer
 
-Shape Viewer is a web-based application that allows users to upload and visualize 2D shapes from a custom file format.
+A web-based application for viewing and manipulating 2D shapes.
 
 ## Features
 
-- Upload shape files (.txt, .shapefile, or .rtf)
-- Display shapes on a canvas
-- Support for multiple shape types (currently rectangles)
-- Color rendering of shapes
+- Load and render shapes from custom text files
+- Support for rectangles, triangles, and polygons
+- Drag-and-drop functionality for moving shapes
+- Rotation of shapes
+- Error handling for invalid shape definitions
 
 ## How to Use
 
-1. Clone the repository or download the ShapeViewer.html file.
-2. Open ShapeViewer.html in a web browser.
-3. Click on "Choose File" and select a shape file.
-4. The shapes from the file will be displayed in the viewport.
+1. Open ShapeViewer.html in a web browser
+2. Click "Choose File" to select a shape file
+3. Shapes will be rendered in the viewport
+4. Drag shapes to move them
+5. Use the blue handle above each shape to rotate it
 
 ## Shape File Format
 
-The shape file should contain one shape per line in the following format:
+Each line in the shape file should define a shape using the following format:
 
-```
-ShapeType, X, Y, Z-index, Width, Height, Color
-```
+- Rectangle: `Rectangle, x, y, z, width, height, color`
+- Triangle: `Triangle, x1, y1, x2, y2, x3, y3, z, color`
+- Polygon: `Polygon, x1, y1, x2, y2, ..., xn, yn, z, color`
 
-Example:
-```
-Rectangle, 0, 0, 0, 50, 50, ff0000
-```
+Where:
+- x, y: coordinates
+- z: z-index for layering
+- width, height: dimensions for rectangles
+- color: 6-digit hexadecimal color code
 
-This creates a red square at coordinates (0,0) with width and height of 50 pixels.
+## Known Limitations
+
+- Performance may degrade with a very large number of shapes
+- Limited to static file input (no real-time shape creation)
 
 ## Future Improvements
 
-- Add support for more shape types (circles, triangles, etc.)
-- Implement zoom and pan functionality
-- Add ability to edit shapes interactively
-- Implement save functionality to export modified shapes
+- Add zoom and pan functionality
+- Implement shape creation interface
+- Add save/load functionality for shape configurations
 
-## Contributing
+## Development
 
-Contributions are welcome! Please feel free to submit a Pull Request.
-
-## License
-
-This project is open source and available under the [MIT License](LICENSE).
+This project was developed as part of a programming assignment. It demonstrates skills in HTML, CSS, JavaScript, and handling of complex user interactions in a web environment.
