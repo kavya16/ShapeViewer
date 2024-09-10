@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Improved Shape Viewer</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        margin: 20px;
+      }
+      #file-content,
+      #shape-viewport,
+      #debug-output,
+      #error-output {
+        margin-top: 20px;
+        border: 1px solid #ccc;
+        padding: 10px;
+      }
+      #shape-viewport {
+        position: relative;
+        height: 400px;
+      }
+      #debug-output,
+      #error-output {
+        white-space: pre-wrap;
+      }
+      #error-output {
+        color: red;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Improved Shape Viewer</h1>
+    <input type="file" id="file-input" accept=".txt,.shapefile,.rtf" />
+    <div id="file-content"></div>
+    <div id="shape-viewport"></div>
+    <div id="debug-output"></div>
+    <div id="error-output"></div>
+
+    <script>
+      // Event listener for file input
+      document
+        .getElementById("file-input")
+        .addEventListener("change", function (event) {
+          const file = event.target.files[0];
+          if (file) {
+            const reader = new FileReader();
+            reader.onload = function (e) {
+              let content = e.target.result;
+              try {
+                content = stripRTF(content);
+                document.getElementById("file-content").textContent = content;
+                renderShapes(content);
+              } catch (error) {
+                handleError(error);
+              }
+            };
+            reader.onerror = function (e) {
+              handleError(new Error("File read error: " + e.target.error));
+            };
+            reader.readAsText(file);
+          }
+        });
+
+      // Function to strip RTF formatting and split shapes
+      function stripRTF(rtf) {
+        if (typeof rtf !== "string") {
+          throw new Error("Invalid input: RTF content must be a string");
+        }
+        rtf = rtf.replace(
+          /\\[a-z]{1,32}(-?\d{1,10})?[ ]?|\\'[0-9a-f]{2}|\\[^a-z]|[{}]|\r+|\n+/gi,
+          ""
+        );
+        return rtf
+          .split(/(?=Rectangle|Triangle|Polygon)/)
+          .map((s) => s.trim())
+          .filter((s) => s);
+      }
+
+      // Main function to render shapes
+      function renderShapes(content) {
+        const viewport = document.getElementById("shape-viewport");
+        const debugOutput = document.getElementById("debug-output");
+        const errorOutput = document.getElementById("error-output");
+        viewport.innerHTML = "";
+        debugOutput.textContent = "";
+        errorOutput.textContent = "";
+
+        content.forEach((shape, index) => {
+          try {
+            const [type, ...params] = shape.split(",").map((s) => s.trim());
+            if (!type) throw new Error("Shape type is missing");
+
+            debugOutput.textContent += `Processing shape ${
+              index + 1
+            }: ${type}\n`;
+
+            const shapeElement = document.createElement("div");
+            shapeElement.style.position = "absolute";
+
+            switch (type.toLowerCase()) {
+              case "rectangle":
+                renderRectangle(shapeElement, params, debugOutput);
+                break;
+              case "triangle":
+                renderTriangle(shapeElement, params, debugOutput);
+                break;
+              case "polygon":
+                renderPolygon(shapeElement, params, debugOutput);
+                break;
+              default:
+                throw new Error(`Unknown shape type: ${type}`);
+            }
+
+            makeShapeDraggable(shapeElement);
+            viewport.appendChild(shapeElement);
+            makeShapeDraggable(shapeElement);
+            makeShapeRotatable(shapeElement); // Add this line
+            viewport.appendChild(shapeElement);
+          } catch (error) {
+            handleError(error, `Error processing shape ${index + 1}`);
+          }
+        });
+      }
+
+      // Function to render a rectangle
+      function renderRectangle(element, params, debugOutput) {
+        if (params.length !== 6)
+          throw new Error("Invalid number of parameters for Rectangle");
+        const [x, y, z, width, height, color] = params.map((param, index) =>
+          index === 5 ? param : validateNumeric(param)
+        );
+        validateColor(color);
+
+        element.style.left = x + "px";
+        element.style.top = y + "px";
+        element.style.width = width + "px";
+        element.style.height = height + "px";
+        element.style.backgroundColor = "#" + color;
+        element.style.zIndex = z;
+        debugOutput.textContent += `  Rectangle: (${x}, ${y}) ${width}x${height}, color: #${color}\n`;
+      }
+
+      // Function to render a triangle
+      function renderTriangle(element, params, debugOutput) {
+        if (params.length !== 8)
+          throw new Error("Invalid number of parameters for Triangle");
+        renderPolygon(element, params, debugOutput, "Triangle");
+      }
+
+      // Function to render a polygon
+      function renderPolygon(
+        element,
+        params,
+        debugOutput,
+        shapeType = "Polygon"
+      ) {
+        if (params.length < 8 || params.length % 2 !== 0) {
+          throw new Error(`Invalid number of parameters for ${shapeType}`);
+        }
+        const z = validateNumeric(params[params.length - 2]);
+        const color = params[params.length - 1];
+        validateColor(color);
+        const points = params.slice(0, -2).map(validateNumeric);
+
+        const minX = Math.min(...points.filter((_, i) => i % 2 === 0));
+        const minY = Math.min(...points.filter((_, i) => i % 2 === 1));
+        const maxX = Math.max(...points.filter((_, i) => i % 2 === 0));
+        const maxY = Math.max(...points.filter((_, i) => i % 2 === 1));
+
+        element.style.left = minX + "px";
+        element.style.top = minY + "px";
+        element.style.width = maxX - minX + "px";
+        element.style.height = maxY - minY + "px";
+        element.style.zIndex = z;
+
+        const canvas = document.createElement("canvas");
+        canvas.width = maxX - minX;
+        canvas.height = maxY - minY;
+        const ctx = canvas.getContext("2d");
+
+        ctx.beginPath();
+        ctx.moveTo(points[0] - minX, points[1] - minY);
+        for (let i = 2; i < points.length; i += 2) {
+          ctx.lineTo(points[i] - minX, points[i + 1] - minY);
+        }
+        ctx.closePath();
+        ctx.fillStyle = "#" + color;
+        ctx.fill();
+
+        element.appendChild(canvas);
+        debugOutput.textContent += `  ${shapeType}: Points: ${points.join(
+          ","
+        )}, color: #${color}\n`;
+      }
+
+      // Function to validate numeric values
+      function validateNumeric(value) {
+        const num = Number(value);
+        if (isNaN(num)) throw new Error(`Invalid numeric value: ${value}`);
+        return num;
+      }
+
+      // Function to validate color format
+      function validateColor(color) {
+        if (!/^[0-9A-Fa-f]{6}$/.test(color)) {
+          throw new Error(`Invalid color format: ${color}`);
+        }
+        return color;
+      }
+
+      // Function to handle errors
+      function handleError(error, context = "") {
+        console.error(error);
+        const errorOutput = document.getElementById("error-output");
+        errorOutput.textContent += `${context ? context + ": " : ""}${
+          error.message
+        }\n`;
+      }
+
+      // Drag and drop functionality
+      let draggedElement = null;
+
+      function makeShapeDraggable(element) {
+        element.style.cursor = "move";
+        element.addEventListener("mousedown", startDragging);
+      }
+
+      function startDragging(e) {
+        draggedElement = this;
+        const rect = draggedElement.getBoundingClientRect();
+        draggedElement.dataset.offsetX = e.clientX - rect.left;
+        draggedElement.dataset.offsetY = e.clientY - rect.top;
+        document.addEventListener("mousemove", drag);
+        document.addEventListener("mouseup", stopDragging);
+        e.preventDefault();
+      }
+
+      function drag(e) {
+        if (draggedElement) {
+          const viewport = document.getElementById("shape-viewport");
+          const viewportRect = viewport.getBoundingClientRect();
+          let newX =
+            e.clientX - viewportRect.left - draggedElement.dataset.offsetX;
+          let newY =
+            e.clientY - viewportRect.top - draggedElement.dataset.offsetY;
+
+          newX = Math.max(
+            0,
+            Math.min(newX, viewportRect.width - draggedElement.offsetWidth)
+          );
+          newY = Math.max(
+            0,
+            Math.min(newY, viewportRect.height - draggedElement.offsetHeight)
+          );
+
+          draggedElement.style.left = newX + "px";
+          draggedElement.style.top = newY + "px";
+
+          // Maintain rotation
+          const currentTransform = draggedElement.style.transform;
+          if (currentTransform) {
+            draggedElement.style.transform = currentTransform;
+          }
+        }
+      }
+
+      function stopDragging() {
+        draggedElement = null;
+        document.removeEventListener("mousemove", drag);
+        document.removeEventListener("mouseup", stopDragging);
+      }
+      // Function to make a shape rotatable
+      function makeShapeRotatable(element) {
+        const rotateHandle = document.createElement("div");
+        rotateHandle.style.position = "absolute";
+        rotateHandle.style.top = "-20px";
+        rotateHandle.style.left = "50%";
+        rotateHandle.style.width = "10px";
+        rotateHandle.style.height = "10px";
+        rotateHandle.style.background = "blue";
+        rotateHandle.style.cursor = "pointer";
+        rotateHandle.style.transform = "translateX(-50%)";
+
+        rotateHandle.addEventListener("mousedown", startRotating);
+        element.appendChild(rotateHandle);
+      }
+
+      // Function to start rotation
+      function startRotating(e) {
+        e.stopPropagation(); // Prevent dragging
+        const shape = this.parentElement;
+        const shapeBounds = shape.getBoundingClientRect();
+        const shapeCenterX = shapeBounds.left + shapeBounds.width / 2;
+        const shapeCenterY = shapeBounds.top + shapeBounds.height / 2;
+
+        function rotateShape(e) {
+          const angle = Math.atan2(
+            e.clientY - shapeCenterY,
+            e.clientX - shapeCenterX
+          );
+          shape.style.transform = `rotate(${angle}rad)`;
+        }
+
+        document.addEventListener("mousemove", rotateShape);
+        document.addEventListener(
+          "mouseup",
+          () => {
+            document.removeEventListener("mousemove", rotateShape);
+          },
+          { once: true }
+        );
+      }
+    </script>
+  </body>
+</html>
