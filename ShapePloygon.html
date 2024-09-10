@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Improved Shape Viewer</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        #file-content, #shape-viewport, #debug-output { 
+            margin-top: 20px; 
+            border: 1px solid #ccc; 
+            padding: 10px; 
+        }
+        #shape-viewport { position: relative; height: 400px; }
+        #debug-output { white-space: pre-wrap; }
+    </style>
+</head>
+<body>
+    <h1>Improved Shape Viewer</h1>
+    <input type="file" id="file-input" accept=".txt,.shapefile,.rtf">
+    <div id="file-content"></div>
+    <div id="shape-viewport"></div>
+    <div id="debug-output"></div>
+
+    <script>
+        document.getElementById('file-input').addEventListener('change', function(event) {
+            const file = event.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    let content = e.target.result;
+                    content = stripRTF(content);
+                    document.getElementById('file-content').textContent = content;
+                    renderShapes(content);
+                };
+                reader.readAsText(file);
+            }
+        });
+
+        function stripRTF(rtf) {
+            rtf = rtf.replace(/\\[a-z]{1,32}(-?\d{1,10})?[ ]?|\\'[0-9a-f]{2}|\\[^a-z]|[{}]|\r+|\n+/gi, "");
+            return rtf.split(/(?=Rectangle|Triangle|Polygon)/).map(s => s.trim()).filter(s => s);
+        }
+
+        function renderShapes(content) {
+            const viewport = document.getElementById('shape-viewport');
+            const debugOutput = document.getElementById('debug-output');
+            viewport.innerHTML = '';
+            debugOutput.textContent = '';
+            
+            content.forEach((shape, index) => {
+                const [type, ...params] = shape.split(',').map(s => s.trim());
+                debugOutput.textContent += `Processing shape ${index + 1}: ${type}\n`;
+                
+                const shapeElement = document.createElement('div');
+                shapeElement.style.position = 'absolute';
+                
+                switch(type.toLowerCase()) {
+                    case 'rectangle':
+                        renderRectangle(shapeElement, params, debugOutput);
+                        break;
+                    case 'triangle':
+                        renderTriangle(shapeElement, params, debugOutput);
+                        break;
+                    case 'polygon':
+                        renderPolygon(shapeElement, params, debugOutput);
+                        break;
+                    default:
+                        debugOutput.textContent += `  Unknown shape type: ${type}\n`;
+                }
+                
+                viewport.appendChild(shapeElement);
+            });
+        }
+
+        function renderRectangle(element, params, debugOutput) {
+            const [x, y, z, width, height, color] = params;
+            element.style.left = x + 'px';
+            element.style.top = y + 'px';
+            element.style.width = width + 'px';
+            element.style.height = height + 'px';
+            element.style.backgroundColor = '#' + color;
+            element.style.zIndex = z;
+            debugOutput.textContent += `  Rectangle: (${x}, ${y}) ${width}x${height}, color: #${color}\n`;
+        }
+
+        function renderTriangle(element, params, debugOutput) {
+            const [x1, y1, x2, y2, x3, y3, z, color] = params;
+            renderPolygon(element, [x1, y1, x2, y2, x3, y3, z, color], debugOutput, 'Triangle');
+        }
+
+        function renderPolygon(element, params, debugOutput, shapeType = 'Polygon') {
+            const z = params[params.length - 2];
+            const color = params[params.length - 1];
+            const points = params.slice(0, -2).map(Number);
+            
+            const minX = Math.min(...points.filter((_, i) => i % 2 === 0));
+            const minY = Math.min(...points.filter((_, i) => i % 2 === 1));
+            const maxX = Math.max(...points.filter((_, i) => i % 2 === 0));
+            const maxY = Math.max(...points.filter((_, i) => i % 2 === 1));
+            
+            element.style.left = minX + 'px';
+            element.style.top = minY + 'px';
+            element.style.width = (maxX - minX) + 'px';
+            element.style.height = (maxY - minY) + 'px';
+            element.style.zIndex = z;
+
+            const canvas = document.createElement('canvas');
+            canvas.width = maxX - minX;
+            canvas.height = maxY - minY;
+            const ctx = canvas.getContext('2d');
+            
+            ctx.beginPath();
+            ctx.moveTo(points[0] - minX, points[1] - minY);
+            for (let i = 2; i < points.length; i += 2) {
+                ctx.lineTo(points[i] - minX, points[i + 1] - minY);
+            }
+            ctx.closePath();
+            ctx.fillStyle = '#' + color;
+            ctx.fill();
+
+            element.appendChild(canvas);
+            debugOutput.textContent += `  ${shapeType}: Points: ${points.join(',')}, color: #${color}\n`;
+        }
+    </script>
+</body>
+</html>
